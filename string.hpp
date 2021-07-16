@@ -16,6 +16,8 @@
 #ifndef AKLIB_STRING_HPP
 #define AKLIB_STRING_HPP
 
+#include <windows.h>
+
 namespace aklib { 
 	namespace string {
 
