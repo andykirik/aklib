@@ -515,20 +515,131 @@ namespace aklib {
 				}
 			}
 
-			template<typename _STRING>
-			_STRING getfilecontent(_STRING filename)
+			template<typename _NAME>
+			bool setfilecontent(_NAME filename, const std::list<std::string>& array)
 			{
-				_STRING out;
+				try {
+					HANDLE hFile = ::CreateFile(filename.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+					if (hFile == INVALID_HANDLE_VALUE) {
+						DWORD dw = GetLastError();
+						return false;
+					}
+					DWORD dwWritten;
+					for (auto it = array.begin(); it != array.end(); it++) 
+					{
+						const std::string& str = *it;
+						::WriteFile(hFile, str.c_str(), (DWORD)str.size(), &dwWritten, NULL);
+						assert(dwWritten == str.size());
+						::WriteFile(hFile, "\r\n", 2, &dwWritten, NULL);
+						assert(dwWritten == 2);
+					}
+
+					CloseHandle(hFile);
+
+				}
+				catch (...) {
+				}
+				return true;
+			}
+
+			template<typename _NAME>
+			bool setfilecontent(_NAME filename, const std::list<std::wstring>& array)
+			{
+				try {
+					HANDLE hFile = ::CreateFile(filename.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+					if (hFile == INVALID_HANDLE_VALUE) {
+						DWORD dw = GetLastError();
+						return false;
+					}
+					DWORD dwWritten;
+					for (auto it = array.begin(); it != array.end(); it++)
+					{
+						const std::wstring& str = *it;
+						::WriteFile(hFile, str.c_str(), (DWORD)str.size() * sizeof(wchar_t), &dwWritten, NULL);
+						assert(dwWritten == str.size());
+						::WriteFile(hFile, L"\r\n", 2, &dwWritten, NULL);
+						assert(dwWritten == 2);
+					}
+
+					CloseHandle(hFile);
+
+				}
+				catch (...) {
+				}
+				return true;
+			}
+
+			bool setfilecontent(std::wstring filename, std::wstring str, const std::locale loc = std::locale(""))
+			{
+				std::locale::global(loc);//En_US, Fr_CH, De_DE
+
+				std::wofstream output(filename.c_str(), std::wios::out | std::wios::trunc | std::wios::binary);
+				if (!output) return false;
+
+				auto dwToWrite = str.length();
+				output.write(str.c_str(), dwToWrite);
+				output.flush();
+				output.close();
+
+				return true;
+			}
+
+			bool setfilecontent(std::string filename, std::string str, const std::locale loc = std::locale(""))
+			{
+				std::locale::global(loc);//En_US, Fr_CH, De_DE
+
+				std::ofstream output(filename.c_str(), std::wios::out | std::wios::trunc | std::wios::binary);
+				if (!output) return false;
+
+				auto dwToWrite = str.length();
+				output.write(str.c_str(), dwToWrite);
+				output.flush();
+				output.close();
+
+				return true;
+			}
+
+			template<typename _STRING>
+			bool setfilecontent(_STRING filename, LPCTSTR buf, int nLen)
+			{
+				try {
+					HANDLE hFile = ::CreateFile(filename.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+					if (hFile == INVALID_HANDLE_VALUE) {
+						DWORD dw = GetLastError();
+						return false;
+					}
+					DWORD dwWritten;
+					::WriteFile(hFile, buf, nLen, &dwWritten, NULL);
+					assert(dwWritten == nLen);
+
+					CloseHandle(hFile);
+
+				}
+				catch (...) {
+				}
+				return true;
+			}
+
+			template<typename _STRING>
+			bool setfilecontent(_STRING filename, _STRING str)
+			{
+				return setfilecontent(filename, str.c_str(), str.length());
+			}
+
+			template<typename _STRING>
+			std::string getfilecontent(_STRING filename)
+			{
+				std::string out;
 				try {
 					HANDLE hFile = ::CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 					if (hFile == INVALID_HANDLE_VALUE) {
 						//DWORD dw = GetLastError();
-						return _T("");
+						return "";
 					}
 
 					// attempt an asynchronous read operation
 					const int nBytesToRead = 10;
-					TCHAR buf[nBytesToRead];
+					char buf[nBytesToRead];
 					DWORD nBytesRead = 0;
 					while (::ReadFile(hFile, &buf, nBytesToRead, &nBytesRead, NULL) && nBytesRead > 0) {
 						for (unsigned int i = 0, j = 0; i < nBytesRead; i++, j++)
@@ -543,7 +654,7 @@ namespace aklib {
 			}
 
 			template<typename _STRING>
-			bool getfilecontent(_STRING filename, std::list<_STRING> &array)
+			bool getfilecontent(_STRING filename, std::list<std::string> &array)
 			{
 				array.clear();
 				try {
@@ -554,28 +665,28 @@ namespace aklib {
 					}
 
 					// attempt an asynchronous read operation
-					TCHAR buf[512];
+					char buf[512];
 					DWORD nBytesRead = 0;
-					_STRING sBegin = _T("");
+					std::string sPreviousRead = "";
 					while (::ReadFile(hFile, &buf, 512, &nBytesRead, NULL) && nBytesRead > 0) {
-						TCHAR* buf2 = new TCHAR[nBytesRead + 1];
+						char* buf2 = new char[nBytesRead + 1];
 						unsigned int i = 0, j = 0;
 						for (; i < nBytesRead; i++, j++) {
 							if (buf[i] == 0x0D || buf[i] == 0x0A) {
 								buf2[j] = 0;
-								_STRING sbuf(buf2);
-								if (!sBegin.empty()) {
-									sbuf = sBegin + sbuf;
-									sBegin = _T("");
+								std::string sLine(buf2);
+								if (!sPreviousRead.empty()) {
+									sLine = sPreviousRead + sLine;
+									sPreviousRead = "";
 								}
 								if (NULL != buf2) {
 									delete[] buf2;
 									buf2 = NULL;
 								}
-								buf2 = new TCHAR[nBytesRead + 1];
-								j = 0;
-								array.push_back(sbuf);
-								if (buf[i + 1] == 0x0A || buf[i + 1] == 0x0A)
+								buf2 = new char[nBytesRead + 1];
+								j = -1;
+								array.push_back(sLine);
+								if (buf[i + 1] == 0x0A || buf[i + 1] == 0x0D)
 									i++;
 							}
 							else {
@@ -583,7 +694,7 @@ namespace aklib {
 							}
 						}
 						buf2[j] = 0;
-						sBegin += buf2;//beginning of new line, the rest would be at next ReadFile call
+						sPreviousRead += buf2;//beginning of new line, the rest would be at next ReadFile call
 						if (NULL != buf2) {
 							delete[] buf2;
 							buf2 = NULL;
@@ -591,9 +702,9 @@ namespace aklib {
 					}
 					::CloseHandle(hFile);
 
-					if (!sBegin.empty()) {
-						array.push_back(sBegin);
-						sBegin = _T("");
+					if (!sPreviousRead.empty()) {
+						array.push_back(sPreviousRead);
+						sPreviousRead = "";
 					}
 
 				}
@@ -602,6 +713,42 @@ namespace aklib {
 				return true;
 			}
 
+			// Read a file in UTF-8, and convert for internal storage in UCS-4 (wchar_t)
+			bool getUTF8filecontent(const char* file_name, std::vector<std::wstring>& input)
+			{
+				std::locale ru_RU("ru_RU.utf8");  // Any UTF-8 locale would do
+				typedef std::codecvt<wchar_t, char, std::mbstate_t> utf8_codecvt_t;
+				const utf8_codecvt_t& utf8_codecvt = std::use_facet<utf8_codecvt_t>(ru_RU);
+				std::locale utf8_locale(ru_RU, &utf8_codecvt);
+				const int max_input_line_length = 512;
+
+				size_t total_length = 0;
+
+				std::wifstream ifs(file_name);
+				if (ifs.is_open())
+				{
+					// This line is the magic that converts UTF-8 to UCS-4
+					ifs.imbue(utf8_locale);
+
+					wchar_t line[max_input_line_length];
+
+					// -1 to have place for string terminator
+					while (ifs.getline(line, max_input_line_length - 1))
+					{
+						input.push_back(line);
+						total_length += std::wcslen(line);
+					}
+
+					//if (!ifs.eof())
+					//	std::cout << "Error reading input file: " << std::strerror(errno) << "\n";
+
+					ifs.close();
+				}
+				else
+					return false;
+
+				return true;
+			}
 
 	} // namespace filesystem
 
